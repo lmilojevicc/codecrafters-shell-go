@@ -9,6 +9,14 @@ import (
 	"syscall"
 )
 
+func getBuiltins() map[string]struct{} {
+	return map[string]struct{}{
+		"exit": {},
+		"echo": {},
+		"type": {},
+	}
+}
+
 func commandHandler(command string, commandArgs []string) {
 	switch command {
 	case "echo":
@@ -18,8 +26,8 @@ func commandHandler(command string, commandArgs []string) {
 		}
 
 		var builder strings.Builder
-		for arg := range commandArgs {
-			builder.WriteString(commandArgs[arg] + " ")
+		for _, arg := range commandArgs {
+			builder.WriteString(arg + " ")
 		}
 		builder.WriteString("\n")
 
@@ -36,6 +44,21 @@ func commandHandler(command string, commandArgs []string) {
 		case "1":
 			os.Exit(1)
 		}
+
+	case "type":
+		if len(commandArgs) != 1 {
+			fmt.Fprintf(os.Stderr, "type command takes one argument")
+			return
+		}
+
+		commandName := commandArgs[0]
+		builtins := getBuiltins()
+		if _, ok := builtins[commandName]; ok {
+			fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", commandName)
+			return
+		}
+
+		fmt.Fprintln(os.Stdout, commandName+": not found")
 
 	default:
 		fmt.Fprintln(os.Stdout, command+": not found")
@@ -62,10 +85,13 @@ func main() {
 		}
 
 		commandStr = strings.TrimRight(commandStr, "\r\n")
-		commandWithArgs := strings.Split(commandStr, " ")
+		tokens := strings.Split(commandStr, " ")
+		if len(tokens) == 0 {
+			continue
+		}
 
-		command := commandWithArgs[0]
-		commandArgs := commandWithArgs[1:]
+		command := tokens[0]
+		commandArgs := tokens[1:]
 		commandHandler(command, commandArgs)
 	}
 }
