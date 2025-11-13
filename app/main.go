@@ -17,48 +17,87 @@ func getBuiltins() map[string]struct{} {
 	}
 }
 
+func handleExit(commandArgs []string) {
+	if len(commandArgs) != 1 {
+		fmt.Fprintf(os.Stderr, "exit command takes one argument")
+		return
+	}
+	switch commandArgs[0] {
+	case "0":
+		os.Exit(0)
+	case "1":
+		os.Exit(1)
+	}
+}
+
+func handleEcho(commandArgs []string) {
+	if len(commandArgs) < 1 {
+		fmt.Fprintf(os.Stderr, "echo command takes at least one argument")
+		return
+	}
+
+	var builder strings.Builder
+	for _, arg := range commandArgs {
+		builder.WriteString(arg + " ")
+	}
+	builder.WriteString("\n")
+
+	fmt.Fprint(os.Stdout, builder.String())
+}
+
+func handleType(commandArgs []string) {
+	if len(commandArgs) != 1 {
+		fmt.Fprintf(os.Stderr, "type command takes one argument")
+		return
+	}
+
+	commandName := commandArgs[0]
+	builtins := getBuiltins()
+	if _, ok := builtins[commandName]; ok {
+		fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", commandName)
+		return
+	}
+
+	if binPath, found := findBin(commandName); found {
+		fmt.Fprintf(os.Stdout, "%s is %s\n", commandName, binPath)
+		return
+	}
+
+	fmt.Fprintf(os.Stdout, "%s: not found\n", commandName)
+}
+
+func isExecutable(fi os.FileInfo) bool {
+	if fi.IsDir() {
+		return false
+	}
+
+	return fi.Mode()&0o111 != 0
+}
+
+func findBin(binName string) (string, bool) {
+	paths := os.Getenv("PATH")
+	for path := range strings.SplitSeq(paths, ":") {
+		binPath := path + "/" + binName
+		if fileInfo, err := os.Stat(binPath); err == nil {
+			if !isExecutable(fileInfo) {
+				continue
+			}
+
+			return binPath, true
+		}
+	}
+
+	return "", false
+}
+
 func commandHandler(command string, commandArgs []string) {
 	switch command {
 	case "echo":
-		if len(commandArgs) < 1 {
-			fmt.Fprintf(os.Stderr, "echo command takes at least one argument")
-			return
-		}
-
-		var builder strings.Builder
-		for _, arg := range commandArgs {
-			builder.WriteString(arg + " ")
-		}
-		builder.WriteString("\n")
-
-		fmt.Fprint(os.Stdout, builder.String())
-
+		handleEcho(commandArgs)
 	case "exit":
-		if len(commandArgs) != 1 {
-			fmt.Fprintf(os.Stderr, "exit command takes one argument")
-			return
-		}
-		switch commandArgs[0] {
-		case "0":
-			os.Exit(0)
-		case "1":
-			os.Exit(1)
-		}
-
+		handleExit(commandArgs)
 	case "type":
-		if len(commandArgs) != 1 {
-			fmt.Fprintf(os.Stderr, "type command takes one argument")
-			return
-		}
-
-		commandName := commandArgs[0]
-		builtins := getBuiltins()
-		if _, ok := builtins[commandName]; ok {
-			fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", commandName)
-			return
-		}
-
-		fmt.Fprintln(os.Stdout, commandName+": not found")
+		handleType(commandArgs)
 
 	default:
 		fmt.Fprintln(os.Stdout, command+": not found")
