@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 )
@@ -15,6 +16,7 @@ func getBuiltins() map[string]struct{} {
 		"exit": {},
 		"echo": {},
 		"type": {},
+		"pwd":  {},
 	}
 }
 
@@ -37,13 +39,7 @@ func handleEcho(args []string) {
 		return
 	}
 
-	var builder strings.Builder
-	for _, arg := range args {
-		builder.WriteString(arg + " ")
-	}
-	builder.WriteString("\n")
-
-	fmt.Fprint(os.Stdout, builder.String())
+	fmt.Fprintln(os.Stdout, strings.Join(args, " "))
 }
 
 func handleType(args []string) {
@@ -119,9 +115,20 @@ func commandHandler(command string, commandArgs []string) {
 		handleExit(commandArgs)
 	case "type":
 		handleType(commandArgs)
+	case "pwd":
+		hadnlePwd()
 	default:
 		executeBinary(command, commandArgs)
 	}
+}
+
+func hadnlePwd() {
+	currPath, err := filepath.Abs(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "couldn't get current working directory:", err)
+	}
+
+	fmt.Fprintln(os.Stdin, currPath)
 }
 
 func main() {
@@ -134,17 +141,22 @@ func main() {
 		os.Exit(0)
 	}()
 
+	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 
-		input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		input, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "couldn't read input: %v\n", err)
 			os.Exit(1)
 		}
 
-		input = strings.TrimRight(input, "\r\n")
-		tokens := strings.Split(input, " ")
+		input = strings.TrimSpace(input)
+		if input == "" {
+			continue
+		}
+
+		tokens := strings.Fields(input)
 		if len(tokens) == 0 {
 			continue
 		}
