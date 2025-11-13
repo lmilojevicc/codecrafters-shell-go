@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -17,12 +18,12 @@ func getBuiltins() map[string]struct{} {
 	}
 }
 
-func handleExit(commandArgs []string) {
-	if len(commandArgs) != 1 {
+func handleExit(args []string) {
+	if len(args) != 1 {
 		fmt.Fprintf(os.Stderr, "exit command takes one argument")
 		return
 	}
-	switch commandArgs[0] {
+	switch args[0] {
 	case "0":
 		os.Exit(0)
 	case "1":
@@ -30,14 +31,14 @@ func handleExit(commandArgs []string) {
 	}
 }
 
-func handleEcho(commandArgs []string) {
-	if len(commandArgs) < 1 {
+func handleEcho(args []string) {
+	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "echo command takes at least one argument")
 		return
 	}
 
 	var builder strings.Builder
-	for _, arg := range commandArgs {
+	for _, arg := range args {
 		builder.WriteString(arg + " ")
 	}
 	builder.WriteString("\n")
@@ -45,13 +46,13 @@ func handleEcho(commandArgs []string) {
 	fmt.Fprint(os.Stdout, builder.String())
 }
 
-func handleType(commandArgs []string) {
-	if len(commandArgs) != 1 {
+func handleType(args []string) {
+	if len(args) != 1 {
 		fmt.Fprintf(os.Stderr, "type command takes one argument")
 		return
 	}
 
-	commandName := commandArgs[0]
+	commandName := args[0]
 	builtins := getBuiltins()
 	if _, ok := builtins[commandName]; ok {
 		fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", commandName)
@@ -64,6 +65,26 @@ func handleType(commandArgs []string) {
 	}
 
 	fmt.Fprintf(os.Stdout, "%s: not found\n", commandName)
+}
+
+func executeBinary(bin string, args []string) {
+	args = append([]string{bin}, args...)
+
+	if binPath, found := findBin(args[0]); found {
+		cmd := exec.Command(binPath, args[1:]...)
+		cmd.Args = args
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintln(os.Stdout, "Error executing command:", err)
+		}
+
+		return
+	}
+
+	fmt.Fprintf(os.Stdout, "%s: not found\n", bin)
 }
 
 func isExecutable(fi os.FileInfo) bool {
@@ -98,9 +119,8 @@ func commandHandler(command string, commandArgs []string) {
 		handleExit(commandArgs)
 	case "type":
 		handleType(commandArgs)
-
 	default:
-		fmt.Fprintln(os.Stdout, command+": not found")
+		executeBinary(command, commandArgs)
 	}
 }
 
@@ -117,14 +137,14 @@ func main() {
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 
-		commandStr, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		input, err := bufio.NewReader(os.Stdin).ReadString('\n')
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "couldn't read input: %v\n", err)
 			os.Exit(1)
 		}
 
-		commandStr = strings.TrimRight(commandStr, "\r\n")
-		tokens := strings.Split(commandStr, " ")
+		input = strings.TrimRight(input, "\r\n")
+		tokens := strings.Split(input, " ")
 		if len(tokens) == 0 {
 			continue
 		}
