@@ -71,6 +71,12 @@ func handleCd(args []string) {
 	}
 
 	path := args[0]
+	isHome := path[0] == '~'
+	if isHome {
+		home := os.Getenv("HOME")
+		path = strings.Replace(path, "~", home, 1)
+	}
+
 	if !pathExists(path) {
 		return
 	}
