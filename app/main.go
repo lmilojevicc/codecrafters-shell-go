@@ -13,10 +13,11 @@ import (
 
 func getBuiltins() map[string]struct{} {
 	return map[string]struct{}{
-		"exit": {},
+		"cd":   {},
 		"echo": {},
-		"type": {},
+		"exit": {},
 		"pwd":  {},
+		"type": {},
 	}
 }
 
@@ -61,6 +62,35 @@ func handleType(args []string) {
 	}
 
 	fmt.Fprintf(os.Stdout, "%s: not found\n", commandName)
+}
+
+func handleCd(args []string) {
+	if len(args) != 1 && len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "cd command takes one or zero arguments")
+		return
+	}
+
+	path := args[0]
+	if !pathExists(path) {
+		return
+	}
+
+	os.Chdir(path)
+}
+
+func pathExists(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", path)
+		return false
+	}
+
+	if !fi.IsDir() {
+		fmt.Fprintf(os.Stderr, "%s is not directory\n", path)
+		return false
+	}
+
+	return true
 }
 
 func executeBinary(bin string, args []string) {
@@ -117,6 +147,8 @@ func commandHandler(command string, commandArgs []string) {
 		handleType(commandArgs)
 	case "pwd":
 		hadnlePwd()
+	case "cd":
+		handleCd(commandArgs)
 	default:
 		executeBinary(command, commandArgs)
 	}
