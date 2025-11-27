@@ -4,169 +4,27 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 )
 
-func getBuiltins() map[string]struct{} {
-	return map[string]struct{}{
-		"cd":   {},
-		"echo": {},
-		"exit": {},
-		"pwd":  {},
-		"type": {},
-	}
-}
-
-func handleExit(args []string) {
-	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "exit command takes one argument")
-		return
-	}
-	switch args[0] {
-	case "0":
-		os.Exit(0)
-	case "1":
-		os.Exit(1)
-	}
-}
-
-func handleEcho(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "echo command takes at least one argument")
-		return
-	}
-
-	fmt.Fprintln(os.Stdout, strings.Join(args, " "))
-}
-
-func handleType(args []string) {
-	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "type command takes one argument")
-		return
-	}
-
-	commandName := args[0]
-	builtins := getBuiltins()
-	if _, ok := builtins[commandName]; ok {
-		fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", commandName)
-		return
-	}
-
-	if binPath, found := findBin(commandName); found {
-		fmt.Fprintf(os.Stdout, "%s is %s\n", commandName, binPath)
-		return
-	}
-
-	fmt.Fprintf(os.Stdout, "%s: not found\n", commandName)
-}
-
-func handleCd(args []string) {
-	if len(args) != 1 && len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "cd command takes one or zero arguments")
-		return
-	}
-
-	path := args[0]
-	isHome := path[0] == '~'
-	if isHome {
-		home := os.Getenv("HOME")
-		path = strings.Replace(path, "~", home, 1)
-	}
-
-	if !pathExists(path) {
-		return
-	}
-
-	os.Chdir(path)
-}
-
-func pathExists(path string) bool {
-	fi, err := os.Stat(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", path)
-		return false
-	}
-
-	if !fi.IsDir() {
-		fmt.Fprintf(os.Stderr, "%s is not directory\n", path)
-		return false
-	}
-
-	return true
-}
-
-func executeBinary(bin string, args []string) {
-	args = append([]string{bin}, args...)
-
-	if binPath, found := findBin(args[0]); found {
-		cmd := exec.Command(binPath, args[1:]...)
-		cmd.Args = args
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintln(os.Stdout, "Error executing command:", err)
-		}
-
-		return
-	}
-
-	fmt.Fprintf(os.Stdout, "%s: not found\n", bin)
-}
-
-func isExecutable(fi os.FileInfo) bool {
-	if fi.IsDir() {
-		return false
-	}
-
-	return fi.Mode()&0o111 != 0
-}
-
-func findBin(binName string) (string, bool) {
-	paths := os.Getenv("PATH")
-	for path := range strings.SplitSeq(paths, ":") {
-		binPath := path + "/" + binName
-		if fileInfo, err := os.Stat(binPath); err == nil {
-			if !isExecutable(fileInfo) {
-				continue
-			}
-
-			return binPath, true
-		}
-	}
-
-	return "", false
-}
-
-func commandHandler(command string, commandArgs []string) {
+func commandHandler(command string, commandArgs string) {
+	args, _ := ProcessArgs(commandArgs)
 	switch command {
 	case "echo":
-		handleEcho(commandArgs)
+		HandleEcho(args)
 	case "exit":
-		handleExit(commandArgs)
+		HandleExit(args)
 	case "type":
-		handleType(commandArgs)
+		HandleType(args)
 	case "pwd":
-		hadnlePwd()
+		HandlePwd()
 	case "cd":
-		handleCd(commandArgs)
+		HandleCd(args)
 	default:
-		executeBinary(command, commandArgs)
+		ExecuteBinary(command, args)
 	}
-}
-
-func hadnlePwd() {
-	currPath, err := filepath.Abs(".")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "couldn't get current working directory:", err)
-	}
-
-	fmt.Fprintln(os.Stdin, currPath)
 }
 
 func main() {
@@ -194,13 +52,20 @@ func main() {
 			continue
 		}
 
-		tokens := strings.Fields(input)
+		tokens := strings.SplitN(input, " ", 2)
 		if len(tokens) == 0 {
 			continue
 		}
 
 		command := tokens[0]
-		commandArgs := tokens[1:]
+
+		var commandArgs string
+		if len(tokens) == 1 {
+			commandArgs = ""
+		} else {
+			commandArgs = tokens[1]
+		}
+
 		commandHandler(command, commandArgs)
 	}
 }
