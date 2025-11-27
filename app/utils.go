@@ -66,10 +66,6 @@ func ProcessArgs(input string) ([]string, error) {
 		}
 
 		if quoteChar != 0 {
-			if r == '\\' {
-				escaped = true
-				continue
-			}
 			if r == quoteChar {
 				quoteChar = 0
 			} else {
@@ -81,18 +77,18 @@ func ProcessArgs(input string) ([]string, error) {
 
 		switch {
 		case unicode.IsSpace(r):
-			if sb.Len() == 0 {
-				continue
+			str := strings.TrimSpace(sb.String())
+			if len(str) != 0 {
+				args = append(args, strings.Trim(sb.String(), " "))
 			}
-			args = append(args, sb.String())
+
 			sb.Reset()
 			argStrated = false
 		case r == '\'' || r == '"':
 			quoteChar = r
 			argStrated = true
 		case r == '\\':
-			sb.WriteRune(r)
-			argStrated = true
+			escaped = !escaped
 		default:
 			sb.WriteRune(r)
 			argStrated = true
