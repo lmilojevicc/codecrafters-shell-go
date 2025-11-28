@@ -9,8 +9,7 @@ import (
 	"syscall"
 )
 
-func commandHandler(command string, commandArgs string) {
-	args, _ := ProcessArgs(commandArgs)
+func commandHandler(command string, args []string) {
 	switch command {
 	case "echo":
 		HandleEcho(args)
@@ -52,20 +51,11 @@ func main() {
 			continue
 		}
 
-		tokens := strings.SplitN(input, " ", 2)
-		if len(tokens) == 0 {
-			continue
-		}
+		tokens, _ := ProcessArgs(input)
 
 		command := tokens[0]
+		commadnArgs := tokens[1:]
 
-		var commandArgs string
-		if len(tokens) == 1 {
-			commandArgs = ""
-		} else {
-			commandArgs = tokens[1]
-		}
-
-		commandHandler(command, commandArgs)
+		commandHandler(command, commadnArgs)
 	}
 }
