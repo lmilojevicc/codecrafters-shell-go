@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unicode"
 )
 
 func PathExists(path string) bool {
@@ -56,42 +55,71 @@ func ProcessArgs(input string) ([]string, error) {
 
 	var quoteChar rune
 	escaped := false
-	argStrated := false
 
 	for _, r := range input {
-		if escaped {
-			escaped = false
-			sb.WriteRune(r)
-			continue
-		}
+		switch quoteChar {
+		case 0:
+			switch r {
+			case '\'':
+				if !escaped {
+					quoteChar = '\''
+				} else {
+					sb.WriteRune(r)
+				}
+			case '"':
+				if !escaped {
+					quoteChar = '"'
+				} else {
+					sb.WriteRune(r)
+				}
+			case '\\':
+				escaped = true
+			case ' ':
+				if escaped {
+					sb.WriteRune(r)
+					escaped = false
+					break
+				}
 
-		if quoteChar != 0 {
-			if r == quoteChar {
-				quoteChar = 0
-			} else {
+				str := strings.TrimSpace(sb.String())
+				if len(str) != 0 {
+					args = append(args, strings.Trim(sb.String(), " "))
+				}
+
+				sb.Reset()
+			default:
 				sb.WriteRune(r)
 			}
-
-			continue
-		}
-
-		switch {
-		case unicode.IsSpace(r):
-			str := strings.TrimSpace(sb.String())
-			if len(str) != 0 {
-				args = append(args, strings.Trim(sb.String(), " "))
+		case '\'':
+			switch r {
+			case '\'':
+				quoteChar = 0
+			default:
+				sb.WriteRune(r)
 			}
-
-			sb.Reset()
-			argStrated = false
-		case r == '\'' || r == '"':
-			quoteChar = r
-			argStrated = true
-		case r == '\\':
-			escaped = !escaped
-		default:
-			sb.WriteRune(r)
-			argStrated = true
+		case '"':
+			switch r {
+			case '\\':
+				if !escaped {
+					escaped = true
+				} else {
+					sb.WriteRune(r)
+					escaped = false
+				}
+			case '"':
+				if !escaped {
+					quoteChar = 0
+				} else {
+					sb.WriteRune(r)
+					escaped = false
+				}
+			default:
+				if escaped {
+					sb.WriteRune('\\')
+					escaped = false
+				}
+				sb.WriteRune(r)
+			}
 		}
 	}
 
@@ -99,7 +127,7 @@ func ProcessArgs(input string) ([]string, error) {
 		return nil, fmt.Errorf("unclosed quote in argument string")
 	}
 
-	if argStrated {
+	if sb.Len() > 0 {
 		args = append(args, sb.String())
 	}
 
